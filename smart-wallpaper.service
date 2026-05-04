@@ -6,6 +6,8 @@ After=graphical-session.target
 ExecStart=/home/jperez/WallpaperEngine/target/release/daemon
 Restart=on-failure
 RestartSec=5
+Environment="WAYLAND_DISPLAY=wayland-1"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
 Environment="ILLOGICAL_IMPULSE_VIRTUAL_ENV=/home/jperez/.local/state/quickshell/.venv"
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/bin:/home/jperez/.local/bin:/home/jperez/.cargo/bin"
 

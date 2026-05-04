@@ -22,41 +22,25 @@ impl WallpaperManager {
             return Ok(());
         }
 
-        println!("Setting wallpaper: {:?} ({:?})", path, media_type);
-        // Kill existing video process if any
-        if let Some(mut child) = self.current_video_process.take() {
-            let _ = child.kill().await;
-        }
+        println!("Setting wallpaper via switchwall.sh: {:?} ({:?})", path, media_type);
 
-        match media_type {
-            MediaType::Image => {
-                // Use the user's native switchwall script for images
-                // Run inside a login shell to ensure all environment variables are sourced
-                let home = std::env::var("HOME").unwrap_or_else(|_| "/home/jperez".to_string());
-                let script_path = format!("{}/.config/quickshell/ii/scripts/colors/switchwall.sh", home);
-                
-                let status = Command::new("bash")
-                    .arg("-l")
-                    .arg("-c")
-                    .arg(format!("\"{}\" \"{}\"", script_path, path.display()))
-                    .stdin(std::process::Stdio::null())
-                    .status()
-                    .await?;
-                
-                if !status.success() {
-                    eprintln!("switchwall.sh failed with status: {}. Is the graphical environment loaded?", status);
-                }
-            }
-            MediaType::Video => {
-                // mpvpaper '*' <path> -o "loop"
-                let child = Command::new("/usr/bin/mpvpaper")
-                    .arg("*")
-                    .arg(path)
-                    .arg("-o")
-                    .arg("loop=inf")
-                    .stdin(std::process::Stdio::null())
-                    .spawn()?;
-                self.current_video_process = Some(child);
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/jperez".to_string());
+        let script_path = format!("{}/.config/quickshell/ii/scripts/colors/switchwall.sh", home);
+        
+        // Spawn switchwall.sh. We don't await its completion to avoid blocking the daemon loop
+        // if the script takes a long time (e.g. generating themes or waiting for notifications).
+        let mut child = Command::new("bash")
+            .arg("-l")
+            .arg("-c")
+            .arg(format!("\"{}\" \"{}\"", script_path, path.display()))
+            .stdin(std::process::Stdio::null())
+            .spawn()?;
+
+        // Give it a moment to start and check if it failed immediately
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        if let Ok(Some(status)) = child.try_wait() {
+            if !status.success() {
+                eprintln!("switchwall.sh failed immediately with status: {}", status);
             }
         }
 

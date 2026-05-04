@@ -75,6 +75,12 @@ pub fn scan_directory(dir: &Path) -> Result<Vec<MediaItem>> {
             continue;
         }
         let path = entry.path().to_path_buf();
+        // Skip generated thumbnail files (e.g. video.webm.thumb.jpg)
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.contains(".thumb.") {
+                continue;
+            }
+        }
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let media_type = match ext.to_lowercase().as_str() {
                 "jpg" | "jpeg" | "png" | "webp" => Some(MediaType::Image),
