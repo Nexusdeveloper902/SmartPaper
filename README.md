@@ -1,4 +1,3 @@
-<![CDATA[<div align="center">
 
 #  SmartPaper
 
@@ -477,4 +476,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 <div align="center">
   <sub>Built with ❤️ in Rust</sub>
 </div>
-]]>
