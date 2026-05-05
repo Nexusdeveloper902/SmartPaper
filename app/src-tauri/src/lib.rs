@@ -29,7 +29,9 @@ async fn get_config() -> Result<Config, String> {
 async fn save_config(config: Config) -> Result<(), String> {
     let path = get_config_path().map_err(|e| e.to_string())?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| e.to_string())?;
     }
     let data = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     fs::write(&path, data).await.map_err(|e| e.to_string())?;
@@ -39,7 +41,9 @@ async fn save_config(config: Config) -> Result<(), String> {
 #[tauri::command]
 async fn next_wallpaper() -> Result<(), String> {
     let socket_path = "/tmp/smart-wallpaper.sock";
-    let mut stream = UnixStream::connect(socket_path).await.map_err(|e| e.to_string())?;
+    let mut stream = UnixStream::connect(socket_path)
+        .await
+        .map_err(|e| e.to_string())?;
     stream.write_all(b"NEXT").await.map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -62,7 +66,7 @@ async fn generate_thumbnail(video_path: String) -> Result<String, String> {
             .status()
             .await
             .map_err(|e| e.to_string())?;
-            
+
         if !status.success() {
             return Err("Failed to generate thumbnail".into());
         }
@@ -77,6 +81,32 @@ pub fn run() {
     std::env::set_var("GTK_A11Y", "none");
 
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|_app, shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        if shortcut.matches(
+                            tauri_plugin_global_shortcut::Modifiers::SUPER
+                                | tauri_plugin_global_shortcut::Modifiers::ALT,
+                            tauri_plugin_global_shortcut::Code::KeyN,
+                        ) {
+                            tokio::spawn(async {
+                                let _ = next_wallpaper().await;
+                            });
+                        }
+                    }
+                })
+                .build(),
+        )
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+                let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::ALT), Code::KeyN);
+                let _ = app.global_shortcut().register(shortcut);
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

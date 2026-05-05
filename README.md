@@ -59,7 +59,7 @@ The daemon watches your wallpaper directory for changes in real-time, automatica
 -  **Directory Watching** — Real-time file system monitoring via `notify`; new wallpapers are picked up automatically
 -  **Tauri GUI** — Modern, dark-themed desktop app to browse thumbnails, toggle wallpapers, and control playback
 -  **Shuffle / Sequential** — Switch between random and sequential rotation order
--  **Skip to Next** — Instantly jump to the next wallpaper via GUI button or IPC command
+-  **Skip to Next** — Instantly jump to the next wallpaper via GUI button, IPC command, or global hotkey (`Super + Alt + N`)
 -  **Thumbnail Generation** — Automatic video thumbnail generation using `ffmpeg`
 -  **Lightweight** — Async Rust daemon with minimal resource usage (tokio runtime)
 -  **IPC Control** — Unix socket interface at `/tmp/smart-wallpaper.sock` for scripting and external control
