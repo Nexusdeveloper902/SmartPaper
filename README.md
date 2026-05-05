@@ -450,8 +450,12 @@ journalctl --user -u smart-wallpaper.service -f
 - Install `ffmpeg` and ensure it's in your `$PATH`
 
 ### App crashes on launch from desktop shortcut
-- Ensure Wayland environment variables are exported (e.g., `GDK_BACKEND=wayland`)
-- Use `systemd-run --user --scope` to isolate the process from the launcher
+- Common stability issues on Wayland/GTK (such as `SIGSEGV` in `libatk-bridge` or WebKit rendering glitches) are now mitigated by internal environment overrides:
+  - `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  - `NO_AT_BRIDGE=1`
+  - `GTK_A11Y=none`
+- If issues persist, ensure Wayland environment variables are exported (e.g., `GDK_BACKEND=wayland`).
+- Use `systemd-run --user --scope` to isolate the process from the launcher if necessary.
 
 ---
 
