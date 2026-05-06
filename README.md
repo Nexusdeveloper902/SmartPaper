@@ -110,6 +110,7 @@ The following tools and libraries are required regardless of distribution:
 | **Node.js** (≥ 18) + **npm** | Building the frontend | App |
 | **Tauri v2 CLI** | Building and bundling the desktop app | App |
 | **mpvpaper** | Rendering video wallpapers on Wayland | Daemon (video) |
+| **awww** or **swww** | Rendering static image wallpapers | Daemon (image) |
 | **ffmpeg** | Generating video thumbnails | App |
 | **webkit2gtk 4.1** | Tauri WebView rendering | App |
 | **A Wayland compositor** | Display server (Hyprland, Sway, etc.) | All |
@@ -291,7 +292,7 @@ cargo tauri build
 
 # Binaries will be at:
 #   Daemon:  ./target/release/daemon
-#   App:     ./app/src-tauri/target/release/app
+#   App:     ./target/release/SmartPaper
 ```
 
 ---
@@ -301,7 +302,7 @@ cargo tauri build
 SmartPaper stores its configuration at:
 
 ```
-~/.config/com.smart-wallpaper.app/config.json
+~/.config/SmartPaper/config.json
 ```
 
 ### Config Schema
@@ -448,6 +449,14 @@ journalctl --user -u smart-wallpaper.service -f
 
 ### Thumbnails not generating
 - Install `ffmpeg` and ensure it's in your `$PATH`
+
+### Global Hotkey not working (Wayland/Hyprland)
+On some Wayland environments, the Tauri global-shortcut plugin may fail to capture keys due to portal restrictions. You can set up a direct binding in your compositor config instead:
+
+**Hyprland example (`hyprland.conf`):**
+```hyprlang
+bind = SUPER_ALT, N, exec, python3 -c "import socket; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/tmp/smart-wallpaper.sock'); s.sendall(b'NEXT'); s.close()"
+```
 
 ### App crashes on launch from desktop shortcut
 - Common stability issues on Wayland/GTK (such as `SIGSEGV` in `libatk-bridge` or WebKit rendering glitches) are now mitigated by internal environment overrides:
