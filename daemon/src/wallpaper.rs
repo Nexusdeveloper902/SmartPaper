@@ -27,12 +27,10 @@ impl WallpaperManager {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/home/jperez".to_string());
         let script_path = format!("{}/.config/quickshell/ii/scripts/colors/switchwall.sh", home);
         
-        // Spawn switchwall.sh. We don't await its completion to avoid blocking the daemon loop
+        // Spawn switchwall.sh directly. We don't await its completion to avoid blocking the daemon loop
         // if the script takes a long time (e.g. generating themes or waiting for notifications).
-        let mut child = Command::new("bash")
-            .arg("-l")
-            .arg("-c")
-            .arg(format!("\"{}\" \"{}\"", script_path, path.display()))
+        let mut child = Command::new(&script_path)
+            .arg(path)
             .stdin(std::process::Stdio::null())
             .spawn()?;
 

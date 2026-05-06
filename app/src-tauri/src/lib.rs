@@ -84,12 +84,22 @@ pub fn run() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|_app, shortcut, event| {
+                    println!("Shortcut event: {:?} {:?}", shortcut, event.state());
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
                         if shortcut.matches(
                             tauri_plugin_global_shortcut::Modifiers::SUPER
                                 | tauri_plugin_global_shortcut::Modifiers::ALT,
                             tauri_plugin_global_shortcut::Code::KeyN,
+                        ) || shortcut.matches(
+                            tauri_plugin_global_shortcut::Modifiers::META
+                                | tauri_plugin_global_shortcut::Modifiers::ALT,
+                            tauri_plugin_global_shortcut::Code::KeyN,
+                        ) || shortcut.matches(
+                            tauri_plugin_global_shortcut::Modifiers::CONTROL
+                                | tauri_plugin_global_shortcut::Modifiers::ALT,
+                            tauri_plugin_global_shortcut::Code::KeyJ,
                         ) {
+                            println!("Global shortcut matches! Skipping to next wallpaper...");
                             tokio::spawn(async {
                                 let _ = next_wallpaper().await;
                             });
@@ -102,8 +112,18 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
-                let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::ALT), Code::KeyN);
-                let _ = app.global_shortcut().register(shortcut);
+                
+                let shortcut_n = Shortcut::new(Some(Modifiers::SUPER | Modifiers::ALT), Code::KeyN);
+                match app.global_shortcut().register(shortcut_n) {
+                    Ok(_) => println!("Hotkey (Super+Alt+N) registered successfully"),
+                    Err(e) => eprintln!("Failed to register hotkey (Super+Alt+N): {}", e),
+                }
+
+                let shortcut_j = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyJ);
+                match app.global_shortcut().register(shortcut_j) {
+                    Ok(_) => println!("Hotkey (Ctrl+Alt+J) registered successfully"),
+                    Err(e) => eprintln!("Failed to register hotkey (Ctrl+Alt+J): {}", e),
+                }
             }
             Ok(())
         })
