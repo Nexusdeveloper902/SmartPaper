@@ -121,19 +121,36 @@ async fn main() -> Result<()> {
                                 ) {
                                     _watcher = w;
                                 }
+                            } else {
+                                // Preserve included/excluded flags from in-memory config
+                                // when the save was triggered by our own DirEvent sync.
+                                for item in &mut new_config.media {
+                                    if let Some(old) = config.media.iter().find(|m| m.path == item.path) {
+                                        item.included = old.included;
+                                    }
+                                }
                             }
 
                             config = new_config;
                             included_media = get_included_media(&config);
-                            current_index = 0;
-                            next_tick = time::Instant::now() + Duration::from_secs(config.interval_seconds.max(1));
+
+                            if dir_changed {
+                                // Only reset rotation when the wallpaper directory itself changes
+                                current_index = 0;
+                                next_tick = time::Instant::now() + Duration::from_secs(config.interval_seconds.max(1));
+                            } else if !included_media.is_empty() && current_index >= included_media.len() {
+                                // Clamp index if media list shrank
+                                current_index = 0;
+                            }
                         }
                     }
                     WatchEvent::DirEvent => {
                         if watcher::sync_media_items(&mut config).unwrap_or(false) {
                             let _ = config_mgr::save_config(&config).await;
                             included_media = get_included_media(&config);
-                            current_index = 0;
+                            if !included_media.is_empty() && current_index >= included_media.len() {
+                                current_index = 0;
+                            }
                         }
                     }
                 }

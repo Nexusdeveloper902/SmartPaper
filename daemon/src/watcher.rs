@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
 use shared::{Config, MediaItem, MediaType};
+use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 use tokio::task;
@@ -16,6 +17,11 @@ pub fn start_watchers(
     tx: mpsc::Sender<WatchEvent>,
 ) -> Result<RecommendedWatcher> {
     let (std_tx, std_rx) = std::sync::mpsc::channel();
+
+    // Ensure the config parent directory exists before trying to watch it
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent).context("Failed to create config directory")?;
+    }
     
     let mut watcher = RecommendedWatcher::new(
         move |res| {
@@ -26,14 +32,20 @@ pub fn start_watchers(
         NotifyConfig::default(),
     )?;
 
-    // Watch config file
+    // Watch config file parent directory
     if let Some(parent) = config_path.parent() {
-        let _ = watcher.watch(parent, RecursiveMode::NonRecursive);
+        watcher.watch(parent, RecursiveMode::NonRecursive)
+            .with_context(|| format!("Failed to watch config directory: {:?}", parent))?;
     }
 
     // Watch wallpaper directory
     if let Some(dir) = wallpaper_dir {
-        let _ = watcher.watch(&dir, RecursiveMode::NonRecursive);
+        if dir.exists() {
+            watcher.watch(&dir, RecursiveMode::NonRecursive)
+                .with_context(|| format!("Failed to watch wallpaper directory: {:?}", dir))?;
+        } else {
+            eprintln!("Wallpaper directory {:?} does not exist yet, skipping watch", dir);
+        }
     }
 
     // Forward events to tokio channel
@@ -46,7 +58,7 @@ pub fn start_watchers(
             for path in &event.paths {
                 if path == &config_path {
                     is_config = true;
-                } else {
+                } else if !is_dir {
                     is_dir = true;
                 }
             }

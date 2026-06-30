@@ -1,17 +1,15 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use shared::MediaType;
 use std::path::Path;
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 
 pub struct WallpaperManager {
-    current_video_process: Option<Child>,
     current_path: Option<std::path::PathBuf>,
 }
 
 impl WallpaperManager {
     pub fn new() -> Self {
         Self {
-            current_video_process: None,
             current_path: None,
         }
     }
@@ -24,23 +22,43 @@ impl WallpaperManager {
 
         println!("Setting wallpaper via switchwall.sh: {:?} ({:?})", path, media_type);
 
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/jperez".to_string());
-        let script_path = format!("{}/.config/quickshell/ii/scripts/colors/switchwall.sh", home);
+        // Resolve the switchwall.sh script path relative to user home
+        let home = std::env::var("HOME").context("HOME environment variable not set")?;
+        let script_path = Path::new(&home).join(".config/quickshell/ii/scripts/colors/switchwall.sh");
+
+        if !script_path.exists() {
+            anyhow::bail!("switchwall.sh not found at {:?}", script_path);
+        }
         
-        // Spawn switchwall.sh directly. We don't await its completion to avoid blocking the daemon loop
-        // if the script takes a long time (e.g. generating themes or waiting for notifications).
+        // Spawn switchwall.sh. We deliberately detach from it (no await)
+        // to avoid blocking the daemon loop while the script generates themes.
         let mut child = Command::new(&script_path)
             .arg(path)
             .stdin(std::process::Stdio::null())
-            .spawn()?;
+            .stdout(std::process::Stdio::null())  // suppress subprocess chatter from daemon's log
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .with_context(|| format!("Failed to spawn switchwall.sh for {:?}", path))?;
 
-        // Give it a moment to start and check if it failed immediately
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        if let Ok(Some(status)) = child.try_wait() {
-            if !status.success() {
-                eprintln!("switchwall.sh failed immediately with status: {}", status);
+        // Detach: spawn a brief async task to log if the child fails quickly
+        tokio::spawn(async move {
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                child.wait(),
+            ).await;
+            match result {
+                Ok(Ok(status)) if !status.success() => {
+                    eprintln!("switchwall.sh finished with error status: {}", status);
+                }
+                Ok(Ok(_)) => {} // success
+                Ok(Err(e)) => {
+                    eprintln!("switchwall.sh wait error: {}", e);
+                }
+                Err(_) => {
+                    // Timed out after 3s — script is still running, that's normal
+                }
             }
-        }
+        });
 
         self.current_path = Some(path.to_path_buf());
         Ok(())

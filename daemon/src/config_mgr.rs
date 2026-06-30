@@ -3,6 +3,7 @@ use directories::ProjectDirs;
 use shared::Config;
 use std::path::PathBuf;
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 
 pub fn get_config_path() -> Result<PathBuf> {
     let proj_dirs = ProjectDirs::from("com", "smart-wallpaper", "app")
@@ -27,6 +28,12 @@ pub async fn save_config(config: &Config) -> Result<()> {
         fs::create_dir_all(parent).await?;
     }
     let data = serde_json::to_string_pretty(config)?;
-    fs::write(&path, data).await?;
+    // Atomic write: write to a temp file, then rename to final path.
+    // This prevents a crash mid-write from corrupting the config file.
+    let tmp_path = path.with_extension("tmp");
+    let mut tmp_file = fs::File::create(&tmp_path).await?;
+    tmp_file.write_all(data.as_bytes()).await?;
+    tmp_file.flush().await?;
+    fs::rename(&tmp_path, &path).await?;
     Ok(())
 }

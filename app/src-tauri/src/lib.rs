@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use shared::Config;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;
 use tokio::process::Command;
+use tokio::time::{timeout, Duration};
 
 fn get_config_path() -> Result<PathBuf> {
     let proj_dirs = ProjectDirs::from("com", "smart-wallpaper", "app")
@@ -41,22 +42,48 @@ async fn save_config(config: Config) -> Result<(), String> {
 #[tauri::command]
 async fn next_wallpaper() -> Result<(), String> {
     let socket_path = "/tmp/smart-wallpaper.sock";
-    let mut stream = UnixStream::connect(socket_path)
+    let mut stream = timeout(Duration::from_secs(2), UnixStream::connect(socket_path))
         .await
-        .map_err(|e| e.to_string())?;
-    stream.write_all(b"NEXT").await.map_err(|e| e.to_string())?;
+        .map_err(|_| "Timed out connecting to daemon".to_string())?
+        .map_err(|e| format!("Failed to connect to daemon: {}", e))?;
+    timeout(Duration::from_secs(2), stream.write_all(b"NEXT"))
+        .await
+        .map_err(|_| "Timed out sending command to daemon".to_string())?
+        .map_err(|e| format!("Failed to send command: {}", e))?;
     Ok(())
 }
 
 #[tauri::command]
 async fn generate_thumbnail(video_path: String) -> Result<String, String> {
-    let output_path = format!("{}.thumb.jpg", video_path);
+    // Sanitize: ensure the video path is absolute and canonical
+    let video = Path::new(&video_path);
+    if !video.is_absolute() {
+        return Err("Video path must be absolute".into());
+    }
+    // Canonicalize to resolve any ".." or symlinks
+    let video = fs::canonicalize(&video).await
+        .map_err(|e| format!("Invalid video path: {}", e))?;
+
+    let output_path = format!("{}.thumb.jpg", video.display());
     if !PathBuf::from(&output_path).exists() {
+        // Check that ffmpeg is available before spawning
+        let ffmpeg_check = Command::new("which")
+            .arg("ffmpeg")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await
+            .map_err(|_| "Failed to check for ffmpeg".to_string())?;
+        if !ffmpeg_check.success() {
+            return Err("ffmpeg is not installed. Please install ffmpeg to generate thumbnails.".into());
+        }
+
         // ffmpeg -i video.mp4 -ss 00:00:01 -vframes 1 thumb.jpg
         let status = Command::new("ffmpeg")
             .arg("-y")
             .arg("-i")
-            .arg(&video_path)
+            .arg(&video)
             .arg("-ss")
             .arg("00:00:01")
             .arg("-vframes")
@@ -65,7 +92,7 @@ async fn generate_thumbnail(video_path: String) -> Result<String, String> {
             .stdin(std::process::Stdio::null())
             .status()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
 
         if !status.success() {
             return Err("Failed to generate thumbnail".into());

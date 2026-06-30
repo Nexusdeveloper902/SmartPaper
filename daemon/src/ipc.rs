@@ -17,13 +17,13 @@ pub fn get_socket_path() -> PathBuf {
 pub fn start_ipc_server(tx: mpsc::Sender<IpcCommand>) -> Result<()> {
     let socket_path = get_socket_path();
 
-    // Clean up old socket
-    if socket_path.exists() {
-        let _ = std::fs::remove_file(&socket_path);
-    }
+    // Remove any stale socket from a previous run.
+    // We don't check for existence first (TOCTOU race); just attempt removal.
+    let _ = std::fs::remove_file(&socket_path);
 
     let listener = UnixListener::bind(&socket_path)?;
-    let _ = std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o666));
+    // Restrict socket to owner-only for security; the GUI app runs as the same user.
+    let _ = std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600));
 
     task::spawn(async move {
         loop {
